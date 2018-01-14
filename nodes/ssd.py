@@ -53,7 +53,7 @@ saver.restore(isess, ckpt_filename)
 ssd_anchors = ssd_net.anchors(net_shape)
 
 # Main image processing routine.
-def ssd_detect(img, select_threshold=0.3, nms_threshold=.45, net_shape=(300, 300)):
+def ssd_detect(img, select_threshold=0.25, nms_threshold=.4, net_shape=(300, 300)):
     # Run SSD network.
     rimg, rpredictions, rlocalisations, rbbox_img = isess.run([image_4d, predictions, localisations, bbox_img],
                                                               feed_dict={img_input: img})
@@ -68,7 +68,27 @@ def ssd_detect(img, select_threshold=0.3, nms_threshold=.45, net_shape=(300, 300
     rclasses, rscores, rbboxes = np_methods.bboxes_nms(rclasses, rscores, rbboxes, nms_threshold=nms_threshold)
     # Resize bboxes to original image shape. Note: useless for Resize.WARP!
     rbboxes = np_methods.bboxes_resize(rbbox_img, rbboxes)
-
+    # print(rbboxes)
     return [rclasses, rscores, rbboxes]
 
 
+def ssd_pyramid(img):
+    clone=img.copy()
+    res_ori=ssd_detect(clone)
+    h, w=img.shape[0], img.shape[1] 
+    
+    for rect in res_ori[2]:
+        y_min=int(rect[0]*h)
+        y_max=int(rect[2]*h)
+        x_min=int(rect[1]*w)
+        x_max=int(rect[3]*w)
+        clone=cv2.rectangle(clone, (x_min, y_min), (x_max, y_max), color=(0, 0, 0), thickness=-1)
+
+
+    res_pyramid=ssd_detect(clone[int(0.35*h):int(0.65*h), int(0.35*w):int(0.65*w)])
+    
+    rclasses=np.concatenate((res_ori[0], res_pyramid[0]), axis=0)
+    rscores=np.concatenate((res_ori[1], res_pyramid[1]), axis=0)
+    rbboxes=np.concatenate((res_ori[2], res_pyramid[2]*0.3+0.35), axis=0)
+    
+    return [rclasses, rscores, rbboxes]
